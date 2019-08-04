@@ -15,10 +15,13 @@ module.exports = {
 			port: 8002
 		},
 
-		rules: {
-			username: {
-				min: 4, max: 15, pattern: "\\w"
-			}
+		/* === === === === === */
+		/* Database
+		/* === === === === === */
+
+		db: {
+			host: '127.0.0.1:27017',
+			name: 'awap'
 		}
 	},
 
@@ -37,10 +40,13 @@ module.exports = {
 			port: 8002
 		},
 
-		rules: {
-			username: {
-				min: 4, max: 15, pattern: "\\w"
-			}
+		/* === === === === === */
+		/* Database
+		/* === === === === === */
+
+		db: {
+			host: '127.0.0.1:27017',
+			name: 'awap'
 		}
 	}
 

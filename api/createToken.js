@@ -2,22 +2,11 @@ const express = require('express');
 const otplib = require('otplib').authenticator;
 const router = express.Router();
 
-const db = require('../core/db');
-
-/* === === === === === */
-/* Get configs
-/* === === === === === */
-
-const mode = process.env.NODE_ENV || 'production';
-const debug = mode === 'development';
-
-const config = require('../core/config');
-
 /* === === === === === */
 /* Extra
 /* === === === === === */
 
-const {validateUsername} = require('../core/funcs');
+const {config, $db, validateUsername} = require('../core/funcs');
 
 /* === === === === === */
 /* Create token
@@ -43,31 +32,54 @@ router.get('/', (req, res) => {
 	});
 
 	/* === === === === === */
-	/* Search user
+	/* Connect to DB
 	/* === === === === === */
 
-	let found = db.get('users').find({username: username.toLowerCase()}).value();
+	$db('users').then(($users) => {
 
-	/* === === === === === */
-	/* If found
-	/* === === === === === */
+		let _username = username.toLowerCase();
 
-	if(found) return res.status(409).send({
-		error: 409,
-		message: `User with username "${username}" already exists`
-	});
+		/* === === === === === */
+		/* Search users with same username
+		/* === === === === === */
+		
+		$users.countDocuments({
+			username: _username
+		}).then((amount) => {
+			
+			/* === === === === === */
+			/* When same user found
+			/* === === === === === */
+			
+			if(amount) return res.status(409).send({
+				error: 409,
+				details: {
+					message: 'User with same username already registered'
+				}
+			});
 
-	/* === === === === === */
-	/* If not found
-	/* === === === === === */
+			/* === === === === === */
+			/* Generate a token
+			/* === === === === === */
 
-	let token = otplib.generateSecret();
+			let token = otplib.generateSecret();
 
-	return res.status(200).send({
-		error: null,
-		message: `User with username "${username}" not found`,
-		token,
-		OTPURI: otplib.keyuri(username, 'AWAP', token)
+			return res.status(200).send({
+				error: null,
+				message: `OK`,
+				token,
+				OTPURI: otplib.keyuri(username, 'AWAP', token)
+			});
+
+		});
+
+	}).catch((error) => {
+		console.error(error);
+
+		res.status(500).send({
+			error: 500,
+			details: error
+		});
 	});
 
 })

@@ -1,24 +1,14 @@
 const express = require('express');
+const mongodb = require('mongodb');
 const otplib = require('otplib').authenticator;
 
 const router = express.Router();
-
-const db = require('../core/db');
-
-/* === === === === === */
-/* Get configs
-/* === === === === === */
-
-const mode = process.env.NODE_ENV || 'production';
-const debug = mode === 'development';
-
-const config = require('../core/config');
 
 /* === === === === === */
 /* Extra
 /* === === === === === */
 
-const {validateUsername} = require('../core/funcs');
+const {config, $db, validateUsername} = require('../core/funcs');
 
 /* === === === === === */
 /* Auth user
@@ -66,31 +56,54 @@ router.get('/', (req, res) => {
 	});
 
 	/* === === === === === */
-	/* Do action
+	/* Connect to db
 	/* === === === === === */
 
-	let user = db.get('users').find({username: username.toLowerCase()}).value();
+	$db('users').then(($users) => {
 
-	/* === === === === === */
-	/* Not authorized
-	/* === === === === === */
+		let _username = username.toLowerCase();
 
-	if(!user || otplib.generate(user.token) !== code) return res.status(401).send({
-		error: 401,
-		details: {
-			message: 'Not authorized'
-		}
+		/* === === === === === */
+		/* Get user`s token
+		/* === === === === === */
+
+		$users.findOne({
+			username: _username
+		}).then((user) => {
+			
+			if(!user || !otplib.check(code, user.token)) return res.status(401).send({
+
+				/* === === === === === */
+				/* When unauthorized
+				/* === === === === === */
+
+				error: 401,
+				details: {
+					message: 'Authentication failed'
+				}
+
+			});
+
+			/* === === === === === */
+			/* When authorized
+			/* === === === === === */
+
+			return res.status(200).send({
+				error: null,
+				message: 'Authentication success',
+				user
+			});
+
+		});
+
+	}).catch((error) => {
+		console.error(error);
+
+		res.status(500).send({
+			error: 500,
+			details: error
+		});
 	});
-
-	/* === === === === === */
-	/* Authorized
-	/* === === === === === */
-
-	return res.status(200).send({
-		error: null,
-		message: 'OK',
-		user
-	})
 
 })
 

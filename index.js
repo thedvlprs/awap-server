@@ -1,16 +1,12 @@
 const express = require('express');
 const rateLimit = require("express-rate-limit");
 const cors = require('cors');
-const bodyParser = require('body-parser');
 
 /* === === === === === */
 /* Vars & Sets
 /* === === === === === */
 
-const mode = process.env.NODE_ENV || 'production';
-const debug = mode === 'development';
-
-const config = require('./core/config');
+const {config} = require('./core/funcs');
 
 const app = express();
 
@@ -23,18 +19,13 @@ app.set('trust proxy', 1);
 app.use(cors());
 
 /* === === === === === */
-/* Enable bodyparser
-/* === === === === === */
-
-app.use(bodyParser.json(), bodyParser.urlencoded({ extended: true }));
-
-/* === === === === === */
 /* Register API
 /* === === === === === */
 
 const registerAPI = require('./api/register');
 
 app.use('/register', rateLimit({
+
 	windowMs: 60 * 60 * 1000, // 1 hour
 	max: 10,
 	message: {
@@ -43,6 +34,7 @@ app.use('/register', rateLimit({
 			message: "Too many accounts registered. Try again later"
 		}
 	}
+
 }), registerAPI);
 
 /* === === === === === */
@@ -68,7 +60,7 @@ app.use('/createToken', rateLimit({
 
 const authAPI = require('./api/auth');
 app.use('/auth', rateLimit({
-	windowMs: 5 * 60 * 1000, // 1 hour
+	windowMs: 5 * 60 * 1000, // 5 minutes
 	max: 10,
 	message: {
 		error: 429,
@@ -82,6 +74,6 @@ app.use('/auth', rateLimit({
 /* Server listen
 /* === === === === === */
 
-app.listen(config[mode].http.port, config[mode].http.ip, () => {
-	console.log(`HTTP Server started at ${config[mode].http.ip}:${config[mode].http.port}`);
+app.listen(config.http.port, config.http.ip, () => {
+	console.log(`HTTP Server started at ${config.http.ip}:${config.http.port}`);
 });

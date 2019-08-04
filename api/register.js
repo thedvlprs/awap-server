@@ -1,24 +1,15 @@
 const express = require('express');
+const mongodb = require('mongodb');
+const formidable = require('formidable');
 const otplib = require('otplib').authenticator;
 
 const router = express.Router();
-
-const db = require('../core/db');
-
-/* === === === === === */
-/* Get configs
-/* === === === === === */
-
-const mode = process.env.NODE_ENV || 'production';
-const debug = mode === 'development';
-
-const config = require('../core/config');
 
 /* === === === === === */
 /* Extra
 /* === === === === === */
 
-const {validateUsername} = require('../core/funcs');
+const {debug, config, validateUsername, $db} = require('../core/funcs');
 
 /* === === === === === */
 /* Register a user
@@ -26,101 +17,148 @@ const {validateUsername} = require('../core/funcs');
 
 router.post('/', (req, res) => {
 	
-	/* === === === === === */
-	/* Get user data
-	/* === === === === === */
+	let form = new formidable.IncomingForm;
 
-	const {
-		username, token, code
-	} = req.body;
+	form.maxFileSize = 0;
 
-	/* === === === === === */
-	/* Check user data
-	/* === === === === === */
+	form.parse(req, (error, fields) => {
 
-	if(!username || !token || !code) return res.status(400).send({
-		error: 400,
-		details: {
-			message: 'Please provide username, token and OTP code'
+		if(error) {
+			console.error(error);
+			return res.status(500).send({
+				error: 500,
+				details: error
+			})
 		}
-	});
+		
+		/* === === === === === */
+		/* Get user data
+		/* === === === === === */
 
-	/* === === === === === */
-	/* Validate username
-	/* === === === === === */
+		const {
+			username, token, code
+		} = fields;
 
-	if(!validateUsername(username)) return res.status(400).send({
-		error: 400,
-		details: {
-			message: 'Invalid username'
-		}
-	});
+		/* === === === === === */
+		/* Check user data
+		/* === === === === === */
 
-	/* === === === === === */
-	/* Validate token
-	/* === === === === === */
+		if(!username || !token || !code) return res.status(400).send({
+			error: 400,
+			details: {
+				message: 'Please provide username, token and OTP code'
+			}
+		});
 
-	if(!(/\w{32}$/).test(token)) return res.status(400).send({
-		error: 400,
-		details: {
-			message: 'Invalid token. It`s length must be 32 symbols'
-		}
-	});
+		/* === === === === === */
+		/* Validate username
+		/* === === === === === */
 
-	/* === === === === === */
-	/* Validate OTP Code
-	/* === === === === === */
+		if(!validateUsername(username)) return res.status(400).send({
+			error: 400,
+			details: {
+				message: 'Invalid username'
+			}
+		});
 
-	if(!(/\d{6}$/).test(code)) return res.status(400).send({
-		error: 400,
-		details: {
-			message: 'Invalid OTP code'
-		}
-	});
+		/* === === === === === */
+		/* Validate token
+		/* === === === === === */
 
-	/* === === === === === */
-	/* Check user exists
-	/* === === === === === */
+		if(!(/\w{32}$/).test(token)) return res.status(400).send({
+			error: 400,
+			details: {
+				message: 'Invalid token. It`s length must be 32 symbols'
+			}
+		});
 
-	let found = db.get('users').find({username: username.toLowerCase()}).value();
+		/* === === === === === */
+		/* Validate OTP Code
+		/* === === === === === */
 
-	/* === === === === === */
-	/* If found
-	/* === === === === === */
+		if(!(/\d{6}$/).test(code)) return res.status(400).send({
+			error: 400,
+			details: {
+				message: 'Invalid OTP code'
+			}
+		});
 
-	if(found) return res.status(409).send({
-		error: 409,
-		message: `User with username "${username}" already exists`
-	});
+		/* === === === === === */
+		/* Check OTP
+		/* === === === === === */
 
-	/* === === === === === */
-	/* Check OTP
-	/* === === === === === */
+		if(!debug && !otplib.check(code, token)) return res.status(400).send({
+			error: 400,
+			details: {
+				message: 'OTP action failed. Check your OTP code'
+			}
+		});
 
-	let OTPCode = otplib.generate(token);
+		/* === === === === === */
+		/* Connect to DB
+		/* === === === === === */
 
-	if(OTPCode !== code) return res.status(400).send({
-		error: 400,
-		details: {
-			message: 'OTP action failed. Check your OTP code'
-		}
-	});
+		$db('users').then(($users) => {
 
-	/* === === === === === */
-	/* Save info about user
-	/* === === === === === */
+		let _username = username.toLowerCase();
 
-	db.get('users').push({
-		username: username.toLowerCase(),
-		displayName: username,
-		token,
-		regTS: new Date(),
-	}).write();
+			/* === === === === === */
+			/* Search users with same username
+			/* === === === === === */
 
-	res.status(200).send({
-		error: null,
-		message: 'OK',
-		user: db.get('users').find({username: username.toLowerCase()}).value()
+			return $users.countDocuments({
+				username: _username
+			}).then((amount) => {
+
+				/* === === === === === */
+				/* When same user found
+				/* === === === === === */
+				
+				if(amount) return res.status(409).send({
+					error: 409,
+					details: {
+						message: 'User with same username already registered'
+					}
+				});
+
+				/* === === === === === */
+				/* Save user to db
+				/* === === === === === */
+
+				return $users.insert({
+
+					/* === === === === === */
+					/* User data to save
+					/* === === === === === */
+
+					username: _username,
+					displayName: username,
+					token,
+					regTS: new Date()
+
+				}).then((result) => res.status(200).send({
+
+					/* === === === === === */
+					/* Response when done
+					/* === === === === === */
+
+					error: null,
+					message: 'User successfully regirestered',
+					user: result.ops[0]
+
+				}));
+
+			});
+
+		}).catch((error) => {
+			console.error(error);
+
+			res.status(500).send({
+				error: 500,
+				details: error
+			});
+		});
+
 	});
 
 })

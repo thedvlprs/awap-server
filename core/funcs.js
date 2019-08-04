@@ -1,3 +1,5 @@
+const mongodb = require('mongodb');
+
 /* === === === === === */
 /* Get configs
 /* === === === === === */
@@ -5,7 +7,7 @@
 const mode = process.env.NODE_ENV || 'production';
 const debug = mode === 'development';
 
-const config = require('../core/config');
+const config = require('../core/config')[mode];
 
 /* === === === === === */
 /* Define functions
@@ -13,10 +15,33 @@ const config = require('../core/config');
 
 module.exports = {
 
-	validateUsername(username = '') {
+	debug, config,
 
-		return (new RegExp(`[${config[mode].rules.username.pattern}]{${config[mode].rules.username.min},${config[mode].rules.username.max}}$`)).test(username);
+	/* === === === === === */
+	/* Validate username
+	/* === === === === === */
 
-	}
+	validateUsername: (username) => (/[\w]{4,15}$/).test(username),
+
+	/* === === === === === */
+	/* Working with DB
+	/* === === === === === */
+
+	$db: (collection) => new Promise((connected, error) => {
+
+		mongodb.connect(`mongodb://${config.db.host}`, {
+			useNewUrlParser: true
+		}, (err, client) => {
+			
+			if(err) return error(err);
+
+			let db = client.db(config.db.name);
+			let $users = db.collection(collection);
+
+			return connected($users);
+
+		});
+
+	})
 
 }
